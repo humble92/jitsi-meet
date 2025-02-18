@@ -36,6 +36,7 @@
         "moment-duration-format": "0.0.0",
         "optional-require": "0.0.0",
         "promise.allsettled": "0.0.0",
+        "promise.withresolvers": "0.0.0",
         "punycode": "0.0.0",
         "react-emoji-render": "0.0.0",
         "react-i18next": "0.0.0",
@@ -58,7 +59,6 @@
     "peerDependencies": {
         "@amplitude/react-native": "0.0.0",
         "@giphy/react-native-sdk": "0.0.0",
-        "@react-native/metro-config": "*",
         "@react-native-async-storage/async-storage": "0.0.0",
         "@react-native-clipboard/clipboard": "0.0.0",
         "@react-native-community/netinfo": "0.0.0",

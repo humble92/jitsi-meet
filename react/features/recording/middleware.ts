@@ -162,7 +162,7 @@ MiddlewareRegistry.register(({ dispatch, getState }) => next => action => {
                     false, 'local', err.message, isRecorderTranscriptionsRunning(getState()));
             }
 
-            dispatch(showErrorNotification(props, NOTIFICATION_TIMEOUT_TYPE.MEDIUM));
+            dispatch(showErrorNotification(props));
         });
         break;
     }
@@ -204,10 +204,14 @@ MiddlewareRegistry.register(({ dispatch, getState }) => next => action => {
             = getSessionById(state, action.sessionData.id);
         const { initiator, mode = '', terminator } = updatedSessionData ?? {};
         const { PENDING, OFF, ON } = JitsiRecordingConstants.status;
+        const isRecordingStarting = updatedSessionData?.status === PENDING && oldSessionData?.status !== PENDING;
 
-        if (updatedSessionData?.status === PENDING && oldSessionData?.status !== PENDING) {
-            dispatch(showPendingRecordingNotification(mode));
+        if (isRecordingStarting || updatedSessionData?.status === ON) {
             dispatch(hideNotification(START_RECORDING_NOTIFICATION_ID));
+        }
+
+        if (isRecordingStarting) {
+            dispatch(showPendingRecordingNotification(mode));
             break;
         }
 
@@ -216,11 +220,11 @@ MiddlewareRegistry.register(({ dispatch, getState }) => next => action => {
         if (updatedSessionData?.status === ON) {
 
             // We receive 2 updates of the session status ON. The first one is from jibri when it joins.
-            // The second one is from jicofo which will deliever the initiator value. Since the start
+            // The second one is from jicofo which will deliver the initiator value. Since the start
             // recording notification uses the initiator value we skip the jibri update and show the
             // notification on the update from jicofo.
-            // FIXE: simplify checks when the backend start sending only one status ON update containing the
-            // initiator.
+            // FIXME: simplify checks when the backend start sending only one status ON update containing
+            // the initiator.
             if (initiator && !oldSessionData?.initiator) {
                 if (typeof recordingLimit === 'object') {
                     dispatch(showRecordingLimitNotification(mode));

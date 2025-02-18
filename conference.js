@@ -155,7 +155,6 @@ import {
     NOTIFICATION_TIMEOUT_TYPE
 } from './react/features/notifications/constants';
 import { isModerationNotificationDisplayed } from './react/features/notifications/functions';
-import { mediaPermissionPromptVisibilityChanged } from './react/features/overlay/actions';
 import { suspendDetected } from './react/features/power-monitor/actions';
 import { initPrejoin, isPrejoinPageVisible } from './react/features/prejoin/functions';
 import { disableReceiver, stopReceiver } from './react/features/remote-control/actions';
@@ -173,7 +172,9 @@ let room;
 
 /*
  * Logic to open a desktop picker put on the window global for
- * lib-jitsi-meet to detect and invoke
+ * lib-jitsi-meet to detect and invoke.
+ *
+ * TODO: remove once the Electron SDK supporting gDM has been out for a while.
  */
 window.JitsiMeetScreenObtainer = {
     openDesktopPicker(options, onSourceChoose) {
@@ -288,7 +289,7 @@ class ConferenceConnector {
                 },
                 descriptionKey: 'dialog.reservationErrorMsg',
                 titleKey: 'dialog.reservationError'
-            }, NOTIFICATION_TIMEOUT_TYPE.LONG));
+            }));
             break;
         }
 
@@ -296,7 +297,7 @@ class ConferenceConnector {
             APP.store.dispatch(showErrorNotification({
                 descriptionKey: 'dialog.gracefulShutdown',
                 titleKey: 'dialog.serviceUnavailable'
-            }, NOTIFICATION_TIMEOUT_TYPE.LONG));
+            }));
             break;
 
         // FIXME FOCUS_DISCONNECTED is a confusing event name.
@@ -435,15 +436,6 @@ export default {
             requestedVideo = true;
         }
 
-        if (!config.disableInitialGUM) {
-            JitsiMeetJS.mediaDevices.addEventListener(
-                JitsiMediaDevicesEvents.PERMISSION_PROMPT_IS_SHOWN,
-                browserName =>
-                    APP.store.dispatch(
-                        mediaPermissionPromptVisibilityChanged(true, browserName))
-            );
-        }
-
         let tryCreateLocalTracks = Promise.resolve([]);
 
         // On Electron there is no permission prompt for granting permissions. That's why we don't need to
@@ -452,8 +444,7 @@ export default {
         const timeout = browser.isElectron() ? 15000 : 60000;
         const audioOptions = {
             devices: [ MEDIA_TYPE.AUDIO ],
-            timeout,
-            firePermissionPromptIsShownEvent: true
+            timeout
         };
 
         // Spot uses the _desktopSharingSourceDevice config option to use an external video input device label as
@@ -488,23 +479,13 @@ export default {
         } else if (requestedAudio || requestedVideo) {
             tryCreateLocalTracks = APP.store.dispatch(createInitialAVTracks({
                 devices: initialDevices,
-                timeout,
-                firePermissionPromptIsShownEvent: true
+                timeout
             }, recordTimeMetrics)).then(({ tracks, errors: pErrors }) => {
                 Object.assign(errors, pErrors);
 
                 return tracks;
             });
         }
-
-        // Hide the permissions prompt/overlay as soon as the tracks are created. Don't wait for the connection to
-        // be established, as in some cases like when auth is required, connection won't be established until the user
-        // inputs their credentials, but the dialog would be overshadowed by the overlay.
-        tryCreateLocalTracks.then(tracks => {
-            APP.store.dispatch(mediaPermissionPromptVisibilityChanged(false));
-
-            return tracks;
-        });
 
         return {
             tryCreateLocalTracks,
@@ -1033,7 +1014,7 @@ export default {
     },
 
     /**
-     * Will be filled with values only when config.debug is enabled.
+     * Will be filled with values only when config.testing.testMode is true.
      * Its used by torture to check audio levels.
      */
     audioLevelsMap: {},
@@ -1420,28 +1401,19 @@ export default {
     /**
      * Creates desktop (screensharing) {@link JitsiLocalTrack}
      *
-     * @param {Object} [options] - Screen sharing options that will be passed to
-     * createLocalTracks.
-     * @param {Object} [options.desktopSharing]
-     * @param {Object} [options.desktopStream] - An existing desktop stream to
-     * use instead of creating a new desktop stream.
      * @return {Promise.<JitsiLocalTrack>} - A Promise resolved with
      * {@link JitsiLocalTrack} for the screensharing or rejected with
      * {@link JitsiTrackError}.
      *
      * @private
      */
-    _createDesktopTrack(options = {}) {
+    _createDesktopTrack() {
         const didHaveVideo = !this.isLocalVideoMuted();
 
-        const getDesktopStreamPromise = options.desktopStream
-            ? Promise.resolve([ options.desktopStream ])
-            : createLocalTracksF({
-                desktopSharingSourceDevice: options.desktopSharingSources
-                    ? null : config._desktopSharingSourceDevice,
-                desktopSharingSources: options.desktopSharingSources,
-                devices: [ 'desktop' ]
-            });
+        const getDesktopStreamPromise = createLocalTracksF({
+            desktopSharingSourceDevice: config._desktopSharingSourceDevice,
+            devices: [ 'desktop' ]
+        });
 
         return getDesktopStreamPromise.then(desktopStreams => {
             // Stores the "untoggle" handler which remembers whether was
@@ -1618,9 +1590,9 @@ export default {
                 newLvl = 0;
             }
 
-            if (config.debug) {
+            if (config.testing?.testMode) {
                 this.audioLevelsMap[id] = newLvl;
-                if (config.debugAudioLevels) {
+                if (config.testing?.debugAudioLevels) {
                     logger.log(`AudioLevel:${id}/${newLvl}`);
                 }
             }

@@ -157,9 +157,9 @@ async function _toggleScreenSharing(
             try {
                 tracks = await createLocalTracksF(options) as any[];
             } catch (error) {
-                dispatch(handleScreenSharingError(error, NOTIFICATION_TIMEOUT_TYPE.MEDIUM));
+                dispatch(handleScreenSharingError(error));
 
-                throw error;
+                return;
             }
         }
 
@@ -171,9 +171,9 @@ async function _toggleScreenSharing(
             desktopVideoTrack.dispose();
 
             if (!desktopAudioTrack) {
-                dispatch(handleScreenSharingError(AUDIO_ONLY_SCREEN_SHARE_NO_TRACK, NOTIFICATION_TIMEOUT_TYPE.MEDIUM));
+                dispatch(handleScreenSharingError(AUDIO_ONLY_SCREEN_SHARE_NO_TRACK));
 
-                throw new Error(AUDIO_ONLY_SCREEN_SHARE_NO_TRACK);
+                return;
             }
         } else if (desktopVideoTrack) {
             if (localScreenshare) {
@@ -359,8 +359,7 @@ export function createInitialAVTracks(options: ICreateInitialTracksOptions, reco
     return (dispatch: IStore['dispatch'], _getState: IStore['getState']) => {
         const {
             devices,
-            timeout,
-            firePermissionPromptIsShownEvent
+            timeout
         } = options;
 
         dispatch(gumPending(devices, IGUMPendingState.PENDING_UNMUTE));
@@ -400,16 +399,14 @@ export function createInitialAVTracks(options: ICreateInitialTracksOptions, reco
             if (devices.includes(MEDIA_TYPE.AUDIO)) {
                 gUMPromises.push(createLocalTracksF({
                     devices: [ MEDIA_TYPE.AUDIO ],
-                    timeout,
-                    firePermissionPromptIsShownEvent
+                    timeout
                 }));
             }
 
             if (devices.includes(MEDIA_TYPE.VIDEO)) {
                 gUMPromises.push(createLocalTracksF({
                     devices: [ MEDIA_TYPE.VIDEO ],
-                    timeout,
-                    firePermissionPromptIsShownEvent
+                    timeout
                 }));
             }
 
@@ -460,7 +457,7 @@ export function displayErrorsForCreateInitialLocalTracks(errors: IInitialTracksE
         } = errors;
 
         if (screenSharingError) {
-            dispatch(handleScreenSharingError(screenSharingError, NOTIFICATION_TIMEOUT_TYPE.LONG));
+            dispatch(handleScreenSharingError(screenSharingError));
         }
         if (audioOnlyError || videoOnlyError) {
             if (audioOnlyError) {
@@ -479,12 +476,10 @@ export function displayErrorsForCreateInitialLocalTracks(errors: IInitialTracksE
  *
  * @private
  * @param {Error | AUDIO_ONLY_SCREEN_SHARE_NO_TRACK} error - The error.
- * @param {NOTIFICATION_TIMEOUT_TYPE} timeout - The time for showing the notification.
  * @returns {Function}
  */
 export function handleScreenSharingError(
-        error: Error | AUDIO_ONLY_SCREEN_SHARE_NO_TRACK,
-        timeout: NOTIFICATION_TIMEOUT_TYPE) {
+        error: Error | AUDIO_ONLY_SCREEN_SHARE_NO_TRACK) {
     return (dispatch: IStore['dispatch']) => {
         logger.error('failed to share local desktop', error);
 
@@ -511,6 +506,6 @@ export function handleScreenSharingError(
         dispatch(showErrorNotification({
             descriptionKey,
             titleKey
-        }, timeout));
+        }));
     };
 }

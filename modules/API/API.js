@@ -75,6 +75,7 @@ import {
     toggleChat
 } from '../../react/features/chat/actions';
 import { openChat } from '../../react/features/chat/actions.web';
+import { showDesktopPicker } from '../../react/features/desktop-picker/actions';
 import {
     processExternalDeviceRequest
 } from '../../react/features/device-selection/functions';
@@ -115,14 +116,15 @@ import { toggleScreenshotCaptureSummary } from '../../react/features/screenshot-
 import { isScreenshotCaptureEnabled } from '../../react/features/screenshot-capture/functions';
 import SettingsDialog from '../../react/features/settings/components/web/SettingsDialog';
 import { SETTINGS_TABS } from '../../react/features/settings/constants';
-import { playSharedVideo, stopSharedVideo } from '../../react/features/shared-video/actions.any';
+import { playSharedVideo, stopSharedVideo } from '../../react/features/shared-video/actions';
 import { extractYoutubeIdOrURL } from '../../react/features/shared-video/functions';
 import { setRequestingSubtitles, toggleRequestingSubtitles } from '../../react/features/subtitles/actions';
 import { isAudioMuteButtonDisabled } from '../../react/features/toolbox/functions';
 import { setTileView, toggleTileView } from '../../react/features/video-layout/actions.any';
 import { muteAllParticipants } from '../../react/features/video-menu/actions';
 import { setVideoQuality } from '../../react/features/video-quality/actions';
-import { toggleBlurredBackgroundEffect } from '../../react/features/virtual-background/actions';
+import { toggleBackgroundEffect, toggleBlurredBackgroundEffect } from '../../react/features/virtual-background/actions';
+import { VIRTUAL_BACKGROUND_TYPE } from '../../react/features/virtual-background/constants';
 import { toggleWhiteboard } from '../../react/features/whiteboard/actions.web';
 import { getJitsiMeetTransport } from '../transport';
 
@@ -589,7 +591,7 @@ function initCommands() {
          * @param { string } arg.title - Notification title.
          * @param { string } arg.description - Notification description.
          * @param { string } arg.uid - Optional unique identifier for the notification.
-         * @param { string } arg.type - Notification type, either `error`, `info`, `normal`, `success` or `warning`.
+         * @param { string } arg.type - Notification type, either `error`, `normal`, `success` or `warning`.
          * Defaults to "normal" if not provided.
          * @param { string } arg.timeout - Timeout type, either `short`, `medium`, `long` or `sticky`.
          * Defaults to "short" if not provided.
@@ -850,6 +852,8 @@ function initCommands() {
         'overwrite-config': config => {
             const whitelistedConfig = getWhitelistedJSON('config', config);
 
+            logger.info(`Overwriting config with: ${JSON.stringify(whitelistedConfig)}`);
+
             APP.store.dispatch(overwriteConfig(whitelistedConfig));
         },
         'toggle-virtual-background': () => {
@@ -871,6 +875,16 @@ function initCommands() {
         },
         'toggle-whiteboard': () => {
             APP.store.dispatch(toggleWhiteboard());
+        },
+        'set-virtual-background': (enabled, backgroundImage) => {
+            const tracks = APP.store.getState()['features/base/tracks'];
+            const jitsiTrack = getLocalVideoTrack(tracks)?.jitsiTrack;
+
+            APP.store.dispatch(toggleBackgroundEffect({
+                backgroundEffectEnabled: enabled,
+                backgroundType: VIRTUAL_BACKGROUND_TYPE.IMAGE,
+                virtualSource: backgroundImage
+            }, jitsiTrack));
         }
     };
     transport.on('event', ({ data, name }) => {
@@ -1035,6 +1049,23 @@ function initCommands() {
         }
         case '_new_electron_screensharing_supported': {
             callback(true);
+
+            break;
+        }
+        case 'open-desktop-picker': {
+            const { desktopSharingSources } = APP.store.getState()['features/base/config'];
+            const options = {
+                desktopSharingSources: desktopSharingSources ?? [ 'screen', 'window' ]
+            };
+            const onSourceChoose = (_streamId, _type, screenShareAudio, source) => {
+                callback({
+                    screenShareAudio,
+                    source
+                });
+            };
+
+            dispatch(showDesktopPicker(options, onSourceChoose));
+
             break;
         }
         default:
@@ -1560,8 +1591,8 @@ class API {
                 formattedArgument += `${arg.toString()}: ${arg.stack}`;
             } else if (typeof arg === 'object') {
                 // NOTE: The non-enumerable properties of the objects wouldn't be included in the string after
-                // JSON.strigify. For example Map instance will be translated to '{}'. So I think we have to eventually
-                // do something better for parsing the arguments. But since this option for strigify is part of the
+                // JSON.stringify. For example Map instance will be translated to '{}'. So I think we have to eventually
+                // do something better for parsing the arguments. But since this option for stringify is part of the
                 // public interface and I think it could be useful in some cases I will it for now.
                 try {
                     formattedArgument += JSON.stringify(arg);
